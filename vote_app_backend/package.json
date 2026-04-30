@@ -1,0 +1,53 @@
+{
+  "name": "vote_app_backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:migrate": "npx prisma migrate dev",
+    "db:studio": "npx prisma studio",
+    "db:generate": "prisma generate"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.1",
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/engines", "esbuild", "prisma"]
+  },
+  "dependencies": {
+    "@arcjet/inspect": "^1.4.0",
+    "@arcjet/node": "^1.4.0",
+    "@aws-sdk/client-s3": "^3.1039.0",
+    "@aws-sdk/s3-request-presigner": "^3.1039.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@t3-oss/env-core": "^0.13.11",
+    "better-auth": "^1.6.9",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "fedapay": "^1.2.5",
+    "helmet": "^8.1.0",
+    "nodemailer": "^8.0.6",
+    "resend": "^6.12.2",
+    "socket.io": "^4.8.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "@types/nodemailer": "^8.0.0",
+    "nodemon": "^3.1.14",
+    "prisma": "^7.8.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

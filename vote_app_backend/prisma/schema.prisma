@@ -1,0 +1,318 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  role          String   @default("organizer") // "organizer" | "admin"
+
+  sessions Session[]
+  accounts Account[]
+
+  banned      Boolean?     @default(false)
+  banReason   String?
+  banExpires  DateTime?
+  members     Member[]
+  invitations Invitation[]
+
+  events       Event[]
+  payouts      Payout[]
+  subscription Subscription?
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  impersonatedBy       String?
+  activeOrganizationId String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+model Event {
+  id           String  @id @default(cuid())
+  title        String
+  description  String?
+  coverImage   String? // URL Cloudflare R2
+  slug         String  @unique // Pour l'URL publique : voteapp.com/events/[slug]
+  customDomain String? @unique // Pour les domaines custom Premium
+
+  // Config du vote
+  voteType     VoteType @default(PAID)
+  pricePerVote Int      @default(0) // En FCFA (centimes si besoin)
+  startDate    DateTime
+  endDate      DateTime
+
+  // Statut
+  status EventStatus @default(DRAFT)
+
+  // Plan & commission
+  plan           PlanType @default(FREE)
+  commissionRate Float    @default(0.20) // 20% par défaut
+
+  // Personnalisation (JSON: couleurs, polices, blocs de page)
+  pageConfig Json?
+
+  qrCodeUrl    String?
+  // Relations
+  organizerId  String
+  organizer    User          @relation(fields: [organizerId], references: [id])
+  candidates   Candidate[]
+  votes        Vote[]
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("events")
+}
+
+model Candidate {
+  id           String  @id @default(cuid())
+  name         String
+  bio          String?
+  photo        String? // URL Cloudflare R2
+  order        Int     @default(0) // Ordre d'affichage
+  qrCodeUrl    String?
+  activeQrCode Boolean @default(false)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  votes   Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("candidates")
+}
+
+model Vote {
+  id       String @id @default(cuid())
+  quantity Int // Nombre de votes achetés
+  amount   Int // Montant payé en FCFA
+
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id])
+
+  // Anti-fraude
+  ipAddress   String?
+  userAgent   String?
+  fingerprint String?
+  phoneNumber String? // Numéro Mobile Money (validation FedaPay)
+
+  // Lien avec la transaction de paiement
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("votes")
+}
+
+model Transaction {
+  id String @id @default(cuid())
+
+  // FedaPay
+  fedapayId        String? @unique // ID de la transaction FedaPay
+  fedapayReference String? // Référence de paiement
+
+  amount           Int // Montant total en FCFA
+  commissionAmount Int // Part VoteApp
+  organizerAmount  Int // Part organisateur
+
+  status        TransactionStatus @default(PENDING)
+  paymentMethod String? // "mtn_benin" | "moov_benin" | "card"
+  phoneNumber   String?
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  vote Vote?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transactions")
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  plan      PlanType
+  status    SubscriptionStatus @default(ACTIVE)
+  startDate DateTime           @default(now())
+  endDate   DateTime
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  // FedaPay
+  fedapayId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+model Payout {
+  id          String       @id @default(cuid())
+  amount      Int // Montant versé en FCFA
+  status      PayoutStatus @default(PENDING)
+  eventId     String?
+  phoneNumber String? // Numéro Mobile Money pour le versement
+  notes       String?
+
+  organizerId String
+  organizer   User   @relation(fields: [organizerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payouts")
+}
+
+// ================================
+// ENUMS
+// ================================
+
+enum VoteType {
+  FREE
+  PAID
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  LIVE
+  ENDED
+  SUSPENDED
+}
+
+enum PlanType {
+  FREE
+  PACK
+  PREMIUM
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
